@@ -1,6 +1,4 @@
 # Final-Project-ME495-Group1
-Baxter Control Project
-# Final-Project-ME495-Group1
 Baxter Control Project - Settlers of Catan
 
 ## Summary
@@ -34,10 +32,39 @@ ROS package for baxter to place "the robber" in Settlers of Catan
  - baxter_interface
  - cv_bridge
  - cv2
-### Nodes
-##### ik_service_cli
-<p>ik_service_client2.py subscribes to opencv/centerofobject to get the center of the block. It then uses that information to generate the static positions of the rest of the board. Locations to random tiles are used to create movement using.</p>
+ 
+### Active Nodes
+##### baxter_movement
+<p>Contained within ik_service_client2.py, it subscribes to opencv/centerofobject to get the center of the block. It then uses that information to generate the static x and y positions of the rest of the board. Locations of random tiles are used to create movement using the built-in Baxter service rospy.ServiceProxy(ns, SolvePositionIK) to determine the joint angles needed for the movement. This movement is then implemented by baxter_interface.Limb('right').move_to_joint_positions(limb_joints) where limb joints is the specified joint angles</p>
 
+<p>A number of functions are defined within ik_service_client2.py to isolate different parts of the movement:</p>
+
+<ol>
+ <li>main():
+  <ul> 
+   <li> Main run function for ik_service_client2.py.</li>
+   <li> Initializes 'baxter_movement' node</li>
+   <li> Starts up the Baxter Robot and calls 'BaxterMovement(p0,q)' to move Baxter into the initial position configuration</li>
+   <li> Subscribes to the "opencv/center_of_object" topic published by the 'listener' node for the block position and pushes the output to the callback function 'imagecb(data)' for further processing</li>
+  </ul>
+ </li>
+ <li>BaxterMovement(p,q):
+  <ul> 
+   <li> Calls Baxter built-in service 'SolvePositionIK' to determine the joint angles for a position 'p' and a hard-coded quaternion 'q' to keep the gripper holding the block facing downward</li> 
+   <li> Calls Baxter built-in function 'SolvePositionIKRequest()' to aid movement determination</li> 
+   <li> Calls 'move_to_joint_positions(limb_joints)' to effect the movement to the new joint angles specified by 'SolvePositionIK'</li> 
+  </ul>
+ </li>
+ <li>imagecb(data):
+  <ul> 
+   <li> Takes the data from the "opencv/center_of_object" topic to get the x and y coordinates of the center block</li> 
+   <li> From that initial data, it generates the positions of the rest of the board </li> 
+   <li> Uses 'BaxterMovement' to effect movement to different tiles</li> 
+  </ul>
+</ol>
+##### open_cv1.py
+<p>
+</p>
 
 ## Video
  - Three stacked blocks (https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/video/video_link.md)
