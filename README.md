@@ -95,6 +95,6 @@ ROS package for baxter to place "the robber" in Settlers of Catan
 ##### pickandplace.py
 <p> Now successfully runs. Uses a dot in the center of surfaces to provide positions. Example: https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/images/center_point.png </p>
 ##### Using AR tags
-<p> Earlier implementation attempted use of AR tags for board identification. However, this attempt was abandoned when not all of the tags could be identified in on camera image. </p>
+<p> Earlier implementation attempted use of AR tags for board identification. However, this attempt was abandoned when not all of the tags could be identified in one camera image. </p>
 ##### Using a larger board
 <p> One stretch goal was to use a large Catan board https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/images/Catan_Board_Large.JPG </p>
