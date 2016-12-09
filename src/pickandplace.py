@@ -13,13 +13,13 @@ from geometry_msgs.msg import (
     Quaternion,
 )
 from std_msgs.msg import Header, Empty
+from sensor_msgs.msg import Image
 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
 
-import baxter_interface
 from ar_track_alvar_msgs.msg import AlvarMarkers
 
 from random import randint
@@ -31,6 +31,7 @@ from baxter_core_msgs.msg import EndpointState
 #cv2
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
+import numpy
 
 class PickAndPlace(object):
     def __init__(self, limb, hover_distance = 0.15, verbose=True):
@@ -168,7 +169,7 @@ def callback(data, args):
                 if curr_Pose.position.z == pnp.list_of_poses[j].position.z:
                     neverIn = False # it was in
             if neverIn:
-            	pnp.list_of_poses.append(curr_Pose)
+                pnp.list_of_poses.append(curr_Pose)
 
     #do we have enough poses now?
     if len(pnp.list_of_poses) > 7:
@@ -187,7 +188,7 @@ def callback(data, args):
             unique.append(cur_pnp_pose)
         # save value
         pnp.list_of_poses = unique
-        
+
     # how about now? enough poses?
     if len(pnp.list_of_poses) != 7: return
     # normal stuff we were doin before
@@ -219,20 +220,20 @@ def callback(data, args):
         curr_loc = block_poses[randint(0, smaller)]
         pnp.place(curr_loc)
         rate.sleep()
-
 # openCV attempt
 def WaitForImage(bridge):
     #image subscriber
-    rospy.Subscriber('/cameras/right_hand_camera/image', Image, GetBoardGraph, callback_args=(bridge,))
+    rospy.Subscriber('/cameras/right_hand_camera/image', Image, GetBoardPositions, callback_args=(bridge,))
     #ImagTrackBar()
     try:
         rospy.spin()
+    except:
+        pass
 
 def GetBoardPositions(data, args):
-	bridge = args[0]
+    bridge = args[0]
     # original image
-    try:
-        imgOriginal = bridge.imgmsg_to_cv2(data, "bgr8")
+    imgOriginal = bridge.imgmsg_to_cv2(data, "bgr8")
     # color ranges
     #colors_of_tiles = [[], [], [], [], [], []]
     #for i in range(0, 6):
@@ -243,115 +244,130 @@ def GetBoardPositions(data, args):
     #	colors_of_tiles[i].append(upper)
     #find center points
     centerPoints = getPointsFromImage(imgOriginal)
+    print centerPoints
+    if len(centerPoints) >= 1:
+        imagecb(centerPoints[0])
+
     ####call ik stuff here ####
-    center = centerPoints[3]
-    centerPoints.Pop(3)
-
-    #init baxter grip
-    baxterright = baxter_interface.Gripper('right')
-    baxterright.calibrate()
-
-    #start by moving cube from center to somewhere
-    last_pos = centerPoints[randint(0, len(centerPoints)-1)]
-    q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
-    
-    # open gripper
-    x = center.x
-    y = center.y    
-    xfac = 530.0
-    yfac = -464.0
-    xp = x/xfac+0.01
-    yp = y/yfac
-    p1 = Point(x=xp,y=yp,z=-0.1851726872428) # old pos down
-    p2 = Point(x=xp,y=yp,z=-0.0351726872428) # old pos up
-    BaxterMovement(p2,q)
-    # open gripper
-    baxterright.open()
-    # go to prev pose 
-    BaxterMovement(p1,q)
-    # grab block
-    baxterright.close()
-    BaxterMovement(p2,q)
-    
-    # go to new pose with block
-    x = last_pos.x
-    y = last_pos.y    
-    xfac = 530.0
-    yfac = -464.0
-    xp = x/xfac+0.01
-    yp = y/yfac
-    p3 = Point(x=xp,y=yp,z=-0.0351726872428) #new pose up
-    p4 = Point(x=xp,y=yp,z=-0.1851726872428) #down
-
-    BaxterMovement(p3,q)
-    BaxterMovement(p4,q)
-    # open
-    baxterright.open()
-    BaxterMovement(p3,q)
-
-    # go back to origin
-    BaxterMovement(p2, q)
-
-    while True:
-        x = last_pos.x
-        y = last_pos.y    
-        xfac = 530.0
-        yfac = -464.0
-        xp = x/xfac+0.01
-        yp = y/yfac
-        p1 = Point(x=xp,y=yp,z=-0.1851726872428) # old pos down
-        # open gripper
-        baxterright.calibrate()
-        baxterright.open()
-        # go to prev pose 
-        BaxterMovement(p1,q)
-        # grab block
-        baxterright.close()
-        p2 = Point(x=xp,y=yp,z=-0.0351726872428) # old pos up
-        BaxterMovement(p2,q)
-        
-        # go to new pose with block
-        cur_pos = centerPoints[randint(0, len(centerPoints)-1)]
-        last_pos = cur_pos
-        x = cur_pos.x
-        y = cur_pos.y    
-        xfac = 530.0
-        yfac = -464.0
-        xp = x/xfac+0.01
-        yp = y/yfac
-        p3 = Point(x=xp,y=yp,z=-0.0351726872428) #new pose up
-        p4 = Point(x=xp,y=yp,z=-0.1851726872428) #down
-
-        BaxterMovement(p3,q)
-        BaxterMovement(p4,q)
-        # open
-        baxterright.open()
-        BaxterMovement(p3,q)
-
-        # go back to origin
-        x = center.x
-        y = center.y    
-        xfac = 530.0
-        yfac = -464.0
-        xp = x/xfac+0.01
-        yp = y/yfac
-        p5 = Point(x=xp,y=yp,z=-0.0351726872428) #back to center up
-        BaxterMovement(p5, q)
+    #center = centerPoints[3]
+    #centerPoints.remove(centerPoints[3])
+#
+    ##init baxter grip
+    #baxterright = baxter_interface.Gripper('right')
+    #baxterright.calibrate()
+#
+    ##start by moving cube from center to somewhere
+    #last_pos = centerPoints[randint(0, len(centerPoints)-1)]
+    #q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w#=-0.0321823626761)
+#
+    ## open gripper
+    #x = center.x
+    #y = center.y
+    #xfac = 530.0
+    #yfac = -464.0
+    #xp = x/xfac+0.01
+    #yp = y/yfac
+    #p1 = Point(x=xp,y=yp,z=-0.1851726872428) # old pos down
+    #p2 = Point(x=xp,y=yp,z=-0.0351726872428) # old pos up
+    #BaxterMovement(p2,q)
+    ## open gripper
+    #baxterright.open()
+    ## go to prev pose
+    #BaxterMovement(p1,q)
+    ## grab block
+    #baxterright.close()
+    #BaxterMovement(p2,q)
+#
+    ## go to new pose with block
+    #x = last_pos.x
+    #y = last_pos.y
+    #xfac = 530.0
+    #yfac = -464.0
+    #xp = x/xfac+0.01
+    #yp = y/yfac
+    #p3 = Point(x=xp,y=yp,z=-0.0351726872428) #new pose up
+    #p4 = Point(x=xp,y=yp,z=-0.1851726872428) #down
+#
+    #BaxterMovement(p3,q)
+    #BaxterMovement(p4,q)
+    ## open
+    #baxterright.open()
+    #BaxterMovement(p3,q)
+#
+    ## go back to origin
+    #BaxterMovement(p2, q)
+#
+    #while True:
+    #    x = last_pos.x
+    #    y = last_pos.y
+    #    xfac = 530.0
+    #    yfac = -464.0
+    #    xp = x/xfac+0.01
+    #    yp = y/yfac
+    #    p1 = Point(x=xp,y=yp,z=-0.1851726872428) # old pos down
+    #    # open gripper
+    #    baxterright.calibrate()
+    #    baxterright.open()
+    #    # go to prev pose
+    #    BaxterMovement(p1,q)
+    #    # grab block
+    #    baxterright.close()
+    #    p2 = Point(x=xp,y=yp,z=-0.0351726872428) # old pos up
+    #    BaxterMovement(p2,q)
+#
+    #    # go to new pose with block
+    #    cur_pos = centerPoints[randint(0, len(centerPoints)-1)]
+    #    last_pos = cur_pos
+    #    x = cur_pos.x
+    #    y = cur_pos.y
+    #    xfac = 530.0
+    #    yfac = -464.0
+    #    xp = x/xfac+0.01
+    #    yp = y/yfac
+    #    p3 = Point(x=xp,y=yp,z=-0.0351726872428) #new pose up
+    #    p4 = Point(x=xp,y=yp,z=-0.1851726872428) #down
+#
+    #    BaxterMovement(p3,q)
+    #    BaxterMovement(p4,q)
+    #    # open
+    #    baxterright.open()
+    #    BaxterMovement(p3,q)
+#
+    #    # go back to origin
+    #    x = center.x
+    #    y = center.y
+    #    xfac = 530.0
+    #    yfac = -464.0
+    #    xp = x/xfac+0.01
+    #    yp = y/yfac
+    #    p5 = Point(x=xp,y=yp,z=-0.0351726872428) #back to center up
+    #    BaxterMovement(p5, q)
 
 def getPointsFromImage(img):
-    img = cv2.imread(filename)
-    edges = cv2.Canny(img,10,100,apertureSize=3)
+    start_x = 150
+    start_y = 300
+    end_x = start_x + 50
+    end_y = start_y + 50
+
+    #start_x = 60
+    #start_y = 200
+    #end_x = start_x + 240
+    #end_y = start_y + 240
+
+    blur = cv2.blur(img[start_x:end_x, start_y:end_y], (5, 5))
+    edges = cv2.Canny(blur,10,100,apertureSize=3)
     dst = cv2.cornerHarris(edges,16,5,.1)
-    black_and_white = np.zeros(img.shape, np.uint8)
+    black_and_white = numpy.zeros(img[start_x:end_x, start_y:end_y].shape, numpy.uint8)
     black_and_white[dst>0.01*dst.max()]=[255,255,255]
     gray = cv2.cvtColor(black_and_white, cv2.COLOR_BGR2GRAY)
     cnt = cv2.findContours(gray, 1, 2)[0]
+    points = []
     for c in cnt:
         x,y,w,h = cv2.boundingRect(c)
         point = (x+int(.5*w),y+int(.5*h))
         points.append(point)
     #sort points by y with thresh
-    y_thresh = 2.0
+    y_thresh = 25.0
     sorted_points_by_y = []
     for p in range(0, len(points)):
         point = points[p]
@@ -359,7 +375,7 @@ def getPointsFromImage(img):
         b = False
         for q in range(0, len(sorted_points_by_y)):
             for r in range(0, len(sorted_points_by_y[q])):
-                if np.abs(float(point[1])-float(sorted_points_by_y[q][r][1])) < y_thresh:
+                if numpy.abs(float(point[1])-float(sorted_points_by_y[q][r][1])) < y_thresh:
                     sorted_points_by_y[q].append(point)
                     b = True
                     break
@@ -369,87 +385,32 @@ def getPointsFromImage(img):
         if not b:
             sorted_points_by_y.append([point])
     points = []
-    for s in range(0, len(sorted_points_by_y)):
-        if len(sorted_points_by_y[s]) < 2:
-            np.delete( sorted_points_by_y, s)
-            --s
-        else:
-            for p in range( 0, len(sorted_points_by_y[s])):
-                points.append(sorted_points_by_y[s][p])
-    #old fasion sort of points by x value
-    sorted_points_tmp = [points[0]]
-    for p in range(1, len(points)):
-        for q in range(0, len(sorted_points_tmp)):
-            if points[p][0] < sorted_points_tmp[q][0]:
-                sorted_points_tmp.insert(q, points[p])
-                break
-            elif q == len(sorted_points_tmp)-1: # append if this was last item
-                sorted_points_tmp.append(points[p])
-                break
-    points = sorted_points_tmp
-    print points
-    #sort points by x with thresh
-    x_thresh = 25
-    sorted_points_by_x = []
-    for p in range(0, len(points)):
-        point = points[p]
-        # check against already sorted
-        b = False
-        for q in range(0, len(sorted_points_by_x)):
-            for r in range(0, len(sorted_points_by_x[q])):
-                if np.abs(np.abs(float(point[0]))-np.abs(float(sorted_points_by_x[q][r][0]))) < x_thresh:
-                    sorted_points_by_x[q].append(point)
-                    b = True
-                    break
-            if b:
-                break
-        #if still not added, make new category and add
-        if not b:
-            sorted_points_by_x.append([point])
-    points = []
     even = True
-    for s in range(0, len(sorted_points_by_x)):
-        if len(sorted_points_by_x[s]) < 2:
-            np.delete( sorted_points_by_x, s)
-            --s
-        elif even:
-            np.delete( sorted_points_by_x, s)
-            --s
-            even = False
-        else:
+    for s in range(0, len(sorted_points_by_y)):
+        if True:
             even = True
-            for p in range( 0, len(sorted_points_by_x[s])):
-                points.append([sorted_points_by_x[s][p][0], sorted_points_by_x[s][p][1]])
+            for p in range( 0, len(sorted_points_by_y[s])):
+                points.append([sorted_points_by_y[s][p][0], sorted_points_by_y[s][p][1]])
+
+    for p in range(0, len(points)):
+        points[p][0] = points[p][0] + start_y
+        points[p][1] = points[p][1] + start_x
+        print points[p]
+       #for p in range(0, len(sorted_points_by_x[s])):
+       #print sorted_points_by_x[s][p]
+    #     cv2.circle(img, (points[p][0], points[p][1]), 5,  (0, 0, 255), -1)
+
+    # cv2.imshow('dst', img)
+    # if cv2.waitKey(0) & 0xff == 27:
+    #    cv2.destroyAllWindows()
+
     return points
 
-#trackbar stuff
-def ImagTrackBar():
-    win = cv2.namedWindow("MyImage")
-    name = "MyImage"
-    cv2.createTrackbar('H_low',name,0,255,tb.nothing)
-    cv2.createTrackbar('S_low',name,164,255,tb.nothing)
-    cv2.createTrackbar('V_low',name,80,255,tb.nothing)
-    cv2.createTrackbar('H_high',name,180,255,tb.nothing)
-    cv2.createTrackbar('S_high',name,220,255,tb.nothing)
-    cv2.createTrackbar('V_high',name,255,255,tb.nothing)
-
-def trackbar(name, image):
-    # get current positions of trackbars
-    h_low = cv2.getTrackbarPos('H_low',name)
-    s_low = cv2.getTrackbarPos('S_low',name)
-    v_low = cv2.getTrackbarPos('V_low',name)
-
-    # get current positions of trackbars
-    h_hi = cv2.getTrackbarPos('H_high',name)
-    s_hi = cv2.getTrackbarPos('S_high',name)
-    v_hi = cv2.getTrackbarPos('V_high',name)
-
-    return [h_low, s_low, v_low, h_hi, s_hi, v_hi]
-########
 
 
 # last resort
 def BaxterMovement(p,q):
+
     rs = baxter_interface.RobotEnable(CHECK_VERSION)
     init_state = rs.state().enabled
 
@@ -495,17 +456,21 @@ def BaxterMovement(p,q):
     return
 
 def imagecb(data):
-    x = data.x
-    y = data.y
+    x = data[0]
+    y = data[1]
+    #x =
 
     print x,y
 
-    xfac = 530.0
-    yfac = -464.0
-    xp = x/xfac+0.01
-    yp = y/yfac
+    xfac = 457.0
+    yfac = -548.0
+    xp = x/xfac
+    yp = y/yfac+0.02
     print xp
     print yp
+
+    # xp = 0.678147548375
+    # yp = -0.2908471534
 
     baxterright = baxter_interface.Gripper('right')
     baxterright.calibrate()
@@ -513,14 +478,20 @@ def imagecb(data):
 
     q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
     #p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
-    p1 = Point(x=xp, y=yp, z=-0.1851726872428)
-    p2 = Point(x=xp,y=-yp,z=-0.1851726872428)
-    p3 = Point(x=xp,y=yp,z=-0.0351726872428)
-    p4 = Point(x=xp+0.064958,y=yp-0.061788,z=-0.0351726872428)
-    p5 = Point(x=xp+0.064958,y=yp-0.061788,z=-0.1851726872428)
-    p6 = Point(x=xp+0.064958,y=yp-0.061788,z=-0.0351726872428)
-    p7 = Point(x=xp,y=yp,z=-0.0351726872428)
-
+    h = 2*0.0245
+    p1 = Point(x=xp,y=yp,z=-0.0451726872428+2*h)
+    p2 = Point(x=xp,y=yp,z=-0.1951726872428+2*h)
+    p3 = Point(x=xp,y=yp,z=-0.0451726872428+2*h)
+    p4 = Point(x=xp+0.064958,y=yp-0.051788,z=-0.0451726872428)
+    p5 = Point(x=xp+0.064958,y=yp-0.051788,z=-0.1951726872428)
+    p6 = Point(x=xp+0.064958,y=yp-0.051788,z=-0.0451726872428)
+    #red
+    p7 = Point(x=xp,y=yp,z=-0.0451726872428+h)
+    p8 = Point(x=xp,y=yp,z=-0.1951726872428+h)
+    p9 = Poinnt(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    p17 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.1951726872428)
+    p18 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    #green
     BaxterMovement(p1,q)
     BaxterMovement(p2,q)
     baxterright.close()
@@ -530,7 +501,22 @@ def imagecb(data):
     baxterright.open()
     BaxterMovement(p6,q)
     BaxterMovement(p7,q)
-#attempt to detect ar tags
+    BaxterMovement(p8,q)
+    baxterright.close()
+    BaxterMovement(p9,q)
+    BaxterMovement(p10,q)
+    BaxterMovement(p11,q)
+    baxterright.open()
+    BaxterMovement(p12,q)
+    BaxterMovement(p13,q)
+    BaxterMovement(p14,q)
+    baxterright.close()
+    BaxterMovement(p15,q)
+    BaxterMovement(p16,q)
+    BaxterMovement(p17,q)
+    baxterright.open()
+    BaxterMovement(p18,q)
+
 def main():
     rospy.init_node("pickandplace")
     open_cv_working = True
@@ -542,7 +528,7 @@ def main():
         rospy.loginfo("Enabling robot... ")
         rs.enable()
         bridge = CvBridge()
-        rightcam = bi.CameraController('right_hand_camera')
+        rightcam = baxter_interface.CameraController('right_hand_camera')
         bridge = CvBridge()
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')
         baxterright = baxter_interface.Gripper('right')
@@ -558,17 +544,115 @@ def main():
         hover_distance = 0.3 # meters
         pnp = PickAndPlace(limb, hover_distance)
         # Starting Joint angles for right arm
-        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_w0': -1.2279516207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_     pass
+rright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())t(x=xp,y=yp,z=-0.0451726872428+h)
+    p10 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    p11 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.1951726872428)
+    p12 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    #blue
+    p13 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p14 = Point(x=xp,y=yp,z=-0.1951726872428)
+    p15 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p16 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    p17 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.1951726872428)
+    p18 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    #green
+    BaxterMovement(p1,q)
+    BaxterMovement(p2,q)
+    baxterright.close()
+    BaxterMovement(p3,q)
+    BaxterMovement(p4,q)
+    BaxterMovement(p5,q)
+    baxterright.open()
+    BaxterMovement(p6,q)
+    BaxterMovement(p7,q)
+    BaxterMovement(p8,q)
+    baxterright.close()
+    BaxterMovement(p9,q)
+    BaxterMovement(p10,q)
+    BaxterMovement(p11,q)
+    baxterright.open()
+    BaxterMovement(p12,q)
+    BaxterMovement(p13,q)
+    BaxterMovement(p14,q)
+    baxterright.close()
+    BaxterMovement(p15,q)
+    BaxterMovement(p16,q)
+    BaxterMovement(p17,q)
+    baxterright.open()
+    BaxterMovement(p18,q)
+
+def main():
+    rospy.init_node("pickandplace")
+    open_cv_working = True
+    ar_code_working = False
+    if open_cv_working:
+        rs = baxter_interface.RobotEnable(CHECK_VERSION)
+        init_state = rs.state().enabled
+        # new baxter default
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        bridge = CvBridge()
+        rightcam = baxter_interface.CameraController('right_hand_camera')
+        bridge = CvBridge()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        # real stuff in this function
+        WaitForImage(bridge)
+    elif ar_code_working:
+        limb = 'right'
+        hover_distance = 0.3 # meters
+        pnp = PickAndPlace(limb, hover_distance)
+        # Starting Joint angles for right arm
+        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_w0': -1.2279516
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
         # Move to the desired starting angles
         pnp.move_to_start(starting_joint_angles)
         #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
         rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
         try:
             rospy.spin()
+        except:
+            pass
     else:
-        rs = baxter_interface.RobotEnable(CHECK_VERSION)
-        init_state = rs.state().enabled
-    
         rospy.loginfo("Enabling robot... ")
         rs.enable()
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')
@@ -584,6 +668,435 @@ def main():
         rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
         try:
             rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        # Move to the desired starting angles
+        pnp.move_to_start(starting_joint_angles)
+        #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
+        rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
+        try:
+            rospy.spin()
+        except:
+            pass
+    else:
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())t(x=xp,y=yp,z=-0.0451726872428+h)
+    p10 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    p11 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.1951726872428)
+    p12 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    #blue
+    p13 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p14 = Point(x=xp,y=yp,z=-0.1951726872428)
+    p15 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p16 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    p17 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.1951726872428)
+    p18 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    #green
+    BaxterMovement(p1,q)
+    BaxterMovement(p2,q)
+    baxterright.close()
+    BaxterMovement(p3,q)
+    BaxterMovement(p4,q)
+    BaxterMovement(p5,q)
+    baxterright.open()
+    BaxterMovement(p6,q)
+    BaxterMovement(p7,q)
+    BaxterMovement(p8,q)
+    baxterright.close()
+    BaxterMovement(p9,q)
+    BaxterMovement(p10,q)
+    BaxterMovement(p11,q)
+    baxterright.open()
+    BaxterMovement(p12,q)
+    BaxterMovement(p13,q)
+    BaxterMovement(p14,q)
+    baxterright.close()
+    BaxterMovement(p15,q)
+    BaxterMovement(p16,q)
+    BaxterMovement(p17,q)
+    baxterright.open()
+    BaxterMovement(p18,q)
+
+def main():
+    rospy.init_node("pickandplace")
+    open_cv_working = True
+    ar_code_working = False
+    if open_cv_working:
+        rs = baxter_interface.RobotEnable(CHECK_VERSION)
+        init_state = rs.state().enabled
+        # new baxter default
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        bridge = CvBridge()
+        rightcam = baxter_interface.CameraController('right_hand_camera')
+        bridge = CvBridge()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        # real stuff in this function
+        WaitForImage(bridge)
+    elif ar_code_working:
+        limb = 'right'
+        hover_distance = 0.3 # meters
+        pnp = PickAndPlace(limb, hover_distance)
+        # Starting Joint angles for right arm
+        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_w0': -1.2279516
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        # Move to the desired starting angles
+        pnp.move_to_start(starting_joint_angles)
+        #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
+        rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
+        try:
+            rospy.spin()
+        except:
+            pass
+    else:
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())w0': -1.2279516
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+rright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())t(x=xp,y=yp,z=-0.0451726872428+h)
+    p10 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    p11 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.1951726872428)
+    p12 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    #blue
+    p13 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p14 = Point(x=xp,y=yp,z=-0.1951726872428)
+    p15 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p16 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    p17 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.1951726872428)
+    p18 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    #green
+    BaxterMovement(p1,q)
+    BaxterMovement(p2,q)
+    baxterright.close()
+    BaxterMovement(p3,q)
+    BaxterMovement(p4,q)
+    BaxterMovement(p5,q)
+    baxterright.open()
+    BaxterMovement(p6,q)
+    BaxterMovement(p7,q)
+    BaxterMovement(p8,q)
+    baxterright.close()
+    BaxterMovement(p9,q)
+    BaxterMovement(p10,q)
+    BaxterMovement(p11,q)
+    baxterright.open()
+    BaxterMovement(p12,q)
+    BaxterMovement(p13,q)
+    BaxterMovement(p14,q)
+    baxterright.close()
+    BaxterMovement(p15,q)
+    BaxterMovement(p16,q)
+    BaxterMovement(p17,q)
+    baxterright.open()
+    BaxterMovement(p18,q)
+
+def main():
+    rospy.init_node("pickandplace")
+    open_cv_working = True
+    ar_code_working = False
+    if open_cv_working:
+        rs = baxter_interface.RobotEnable(CHECK_VERSION)
+        init_state = rs.state().enabled
+        # new baxter default
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        bridge = CvBridge()
+        rightcam = baxter_interface.CameraController('right_hand_camera')
+        bridge = CvBridge()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        # real stuff in this function
+        WaitForImage(bridge)
+    elif ar_code_working:
+        limb = 'right'
+        hover_distance = 0.3 # meters
+        pnp = PickAndPlace(limb, hover_distance)
+        # Starting Joint angles for right arm
+        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_w0': -1.2279516
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        # Move to the desired starting angles
+        pnp.move_to_start(starting_joint_angles)
+        #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
+        rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
+        try:
+            rospy.spin()
+        except:
+            pass
+    else:
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        # Move to the desired starting angles
+        pnp.move_to_start(starting_joint_angles)
+        #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
+        rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
+        try:
+            rospy.spin()
+        except:
+            pass
+    else:
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())t(x=xp,y=yp,z=-0.0451726872428+h)
+    p10 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    p11 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.1951726872428)
+    p12 = Point(x=xp-0.084958,y=yp-0.051788,z=-0.0451726872428)
+    #blue
+    p13 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p14 = Point(x=xp,y=yp,z=-0.1951726872428)
+    p15 = Point(x=xp,y=yp,z=-0.0451726872428)
+    p16 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    p17 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.1951726872428)
+    p18 = Point(x=xp-0.084958,y=yp+0.051788,z=-0.0451726872428)
+    #green
+    BaxterMovement(p1,q)
+    BaxterMovement(p2,q)
+    baxterright.close()
+    BaxterMovement(p3,q)
+    BaxterMovement(p4,q)
+    BaxterMovement(p5,q)
+    baxterright.open()
+    BaxterMovement(p6,q)
+    BaxterMovement(p7,q)
+    BaxterMovement(p8,q)
+    baxterright.close()
+    BaxterMovement(p9,q)
+    BaxterMovement(p10,q)
+    BaxterMovement(p11,q)
+    baxterright.open()
+    BaxterMovement(p12,q)
+    BaxterMovement(p13,q)
+    BaxterMovement(p14,q)
+    baxterright.close()
+    BaxterMovement(p15,q)
+    BaxterMovement(p16,q)
+    BaxterMovement(p17,q)
+    baxterright.open()
+    BaxterMovement(p18,q)
+
+def main():
+    rospy.init_node("pickandplace")
+    open_cv_working = True
+    ar_code_working = False
+    if open_cv_working:
+        rs = baxter_interface.RobotEnable(CHECK_VERSION)
+        init_state = rs.state().enabled
+        # new baxter default
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        bridge = CvBridge()
+        rightcam = baxter_interface.CameraController('right_hand_camera')
+        bridge = CvBridge()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        # real stuff in this function
+        WaitForImage(bridge)
+    elif ar_code_working:
+        limb = 'right'
+        hover_distance = 0.3 # meters
+        pnp = PickAndPlace(limb, hover_distance)
+        # Starting Joint angles for right arm
+        starting_joint_angles = {'right_s0': 0.104694188773, 'right_s1': -0.385029177759, 'right_w0': -1.2279516
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())207, 'right_w1': 1.7859371323, 'right_w2': 0.0521553467881, 'right_e0': 1.43158757029, 'right_e1': 0.734009807003}
+        # Move to the desired starting angles
+        pnp.move_to_start(starting_joint_angles)
+        #subscriber node for the ar stuff, call back takes in the markers and the pnp obj
+        rospy.Subscriber('/ar_pose_marker', AlvarMarkers, callback, callback_args=(pnp,))
+        try:
+            rospy.spin()
+        except:
+            pass
+    else:
+        rospy.loginfo("Enabling robot... ")
+        rs.enable()
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        baxterright = baxter_interface.Gripper('right')
+        baxterright.calibrate()
+        baxterright.open()
+        q = Quaternion(x=-0.0177807149532, y=0.999274143222, z=-0.00996636325311, w=-0.0321823626761)
+        p0 = Point(x=0.678147548375,y=-0.2908471534,z=-0.0351726872428)
+        BaxterMovement(p0,q)
+        print 'a'
+        rospy.sleep(1.5)
+        print 'b'
+        rospy.Subscriber("opencv/center_of_object", Point, imagecb, queue_size=1)
+        try:
+            rospy.spin()
+        except:
+            pass
 
 if __name__ == '__main__':
     sys.exit(main())
