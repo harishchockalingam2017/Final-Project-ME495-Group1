@@ -9,7 +9,7 @@ ROS package for baxter to place "the robber" in Settlers of Catan
 ## Substitutions & Modifications to Catan
  - Robber is cube with a red surface on top
  - Board has seven tiles with unique solid colors and a white point in the center for location determination
- - Random number generation is used in place of actual dice rolls
+ - Random number generation is used in place of actual dice rolls (however, dice roll is not implemented instead baxter moves three robber cubes to fixed positions (red green and yellow) after an initial signal of sensing the block once moved into field of view)
 
 ## Rules
  - Robber cannot be placed back in the black tile (the robber starting position)
