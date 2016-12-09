@@ -18,10 +18,10 @@ ROS package for baxter to place "the robber" in Settlers of Catan
 ## Documentation
 ###Names
  - Package Name: Baxter_Catan
- - Launch File: launch/settlers_of_catan.launch
- - pickandplace.py (sourced from http://sdk.rethinkrobotics.com/wiki/IK_Pick_and_Place_Demo_-_Code_Walkthrough)
- - Execution File: opencv1.py (Mario Sebasco helped us get started)
- - Execution File: ik_service_client2.py
+ - Launch File: launch/settlers_of_catan.launch https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/launch/settlers_of_catan.launch
+ - pickandplace.py https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/src/pickandplace.py (inspired by http://sdk.rethinkrobotics.com/wiki/IK_Pick_and_Place_Demo_-_Code_Walkthrough)
+ - Execution File: opencv1.py https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/src/opencv1.py (Mario Sebasco helped us get started)
+ - Execution File: ik_service_client2.py https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/src/ik_service_client2.py
 ### Dependencies
  - tf
  - visualization_msgs
