@@ -1,0 +1,4 @@
+<launch>
+			<node name="listener" pkg="final_project_me495_group1" type="opencv1.py"/>
+      <node name="main" pkg="final_project_me495_group1" type="ik_service_client2.py"/>
+</launch>
