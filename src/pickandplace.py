@@ -530,7 +530,7 @@ def imagecb(data):
     baxterright.open()
     BaxterMovement(p6,q)
     BaxterMovement(p7,q)
-
+#attempt to detect ar tags
 def main():
     rospy.init_node("pickandplace")
     open_cv_working = True
