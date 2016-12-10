@@ -91,6 +91,7 @@ ROS package for baxter to place "the robber" in Settlers of Catan
 </ol>
 ## Video for Presentation
  - Three stacked blocks (https://github.com/harishchockalingam2017/Final-Project-ME495-Group1/blob/master/video/video_link.md)
+ - Three stacked blocks using pickandplace.py, detecting the cetner of tiles (https://www.youtube.com/watch?v=hIFBWVYbwV8)
 
 ## Function and Approaches not used in the Presentation
 ##### pickandplace.py
